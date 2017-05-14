@@ -26,6 +26,24 @@
 	<string>Copyright © 2017 jonas. All rights reserved.</string>
 	<key>NSMainStoryboardFile</key>
 	<string>Main</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>owl</key>
+			<string></string>
+			<key>10.0.1.40</key>
+			<string></string>
+			<key>lyratarium.com</key>
+			<string></string>
+			<key>owl.lyratarium.com</key>
+			<string></string>
+		</dict>
+	</dict>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>
