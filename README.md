@@ -1,0 +1,3 @@
+# What is this?
+
+This is used in my home weather monitoring setup. Basically, I use my weathersnarf project to get data from a rooftop weather station. That stashes data into http-keystore, which gets polled by this thing. It's not really meant for other people to use, but if it helps someone, great. Also, thanks to Github for giving me a free place to stash things like this, since I inevitably lose them.
