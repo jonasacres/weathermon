@@ -13,29 +13,44 @@ import Cocoa
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
 
-    let statusItem = NSStatusBar.system().statusItem(withLength:-2)
-    let temperatureMenuItem = NSMenuItem(title: "?F", action: #selector(doNothing(sender:)), keyEquivalent:"")
-    let windMenuItem = NSMenuItem(title: "?mph ?", action: #selector(doNothing(sender:)), keyEquivalent:"")
-    let barometerMenuItem = NSMenuItem(title: "? inHg", action: #selector(doNothing(sender:)), keyEquivalent:"")
-    let humidityMenuItem = NSMenuItem(title: "?% humidity", action: #selector(doNothing(sender:)), keyEquivalent:"")
-    let dewpointMenuItem = NSMenuItem(title: "?F dewpoint", action: #selector(doNothing(sender:)), keyEquivalent:"")
-    let rainfallMenuItem = NSMenuItem(title: "?\" rainfall", action: #selector(doNothing(sender:)), keyEquivalent:"")
-    let dailyRainfallMenuItem = NSMenuItem(title: "?\" today", action: #selector(doNothing(sender:)), keyEquivalent:"")
+    let statusItem = NSStatusBar.system().statusItem(withLength:125)
+    let temperatureMenuItem = NSMenuItem(title: "?F", action: #selector(pickItem(sender:)), keyEquivalent:"")
+    let windMenuItem = NSMenuItem(title: "?mph ?", action: #selector(pickItem(sender:)), keyEquivalent:"")
+    let barometerMenuItem = NSMenuItem(title: "? inHg", action: #selector(pickItem(sender:)), keyEquivalent:"")
+    let humidityMenuItem = NSMenuItem(title: "?% humidity", action: #selector(pickItem(sender:)), keyEquivalent:"")
+    let dewpointMenuItem = NSMenuItem(title: "?F dewpoint", action: #selector(pickItem(sender:)), keyEquivalent:"")
+    let rainfallMenuItem = NSMenuItem(title: "?\" rainfall", action: #selector(pickItem(sender:)), keyEquivalent:"")
+    let dailyRainfallMenuItem = NSMenuItem(title: "?\" today", action: #selector(pickItem(sender:)), keyEquivalent:"")
+    let photoResistorMenuItem = NSMenuItem(title: "?V photo", action: #selector(pickItem(sender:)), keyEquivalent:"")
+    let solarOutputMenuItem = NSMenuItem(title: "?V ?mW solar", action: #selector(pickItem(sender:)), keyEquivalent:"")
     
-    func doNothing(sender:AnyObject) {
+    var activeItem: NSMenuItem!;
+    
+    func pickItem(sender:NSMenuItem) {
+        activeItem = sender;
+        updateMenuLabel();
+    }
+    
+    func updateMenuLabel() {
+        statusItem.button?.title = activeItem.title
     }
     
     func convertToDirection(degrees:Int) -> String {
         let names = [ "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW" ]
-        let index = ((degrees + 11) % 360) / (360/names.count)
+        let index = ((Double(degrees) + 360/(2*16)).truncatingRemainder(dividingBy:360)) / (360/16)
         
-        return names[index]
+        return names[Int(index)]
     }
     
     @objc func getUpdate() {
-        let url = URL(string: "http://owl.lyratarium.com:11000/sensor-00002116")
         Timer.scheduledTimer(timeInterval:15, target: self, selector: #selector(self.getUpdate), userInfo: nil, repeats: false)
 
+        getWeatherUpdate()
+        getSolarUpdate()
+    }
+    
+    func getWeatherUpdate() {
+        let url = URL(string: "http://owl.lyratarium.com:11000/sensor-00002116")
         let task = URLSession.shared.dataTask(with: url!) { (data, response, error) in
             guard error == nil else {
                 print(error!)
@@ -46,9 +61,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             
-            let parsed = try! JSONSerialization.jsonObject(with: data, options: [])
-            if let info = parsed as? [String: Any] {
-                self.updateData(info:info)
+            if let parsed = try? JSONSerialization.jsonObject(with: data, options: []) {
+                if let info = parsed as? [String: Any] {
+                    self.updateWeatherData(info:info)
+                }
+            }
+        }
+        
+        task.resume()
+    }
+    
+    func getSolarUpdate() {
+        let url = URL(string: "http://owl.lyratarium.com:11000/solar-sensors")
+        let task = URLSession.shared.dataTask(with: url!) { (data, response, error) in
+            guard error == nil else {
+                print(error!)
+                return
+            }
+            guard let data = data else {
+                print("Data is empty")
+                return
+            }
+            
+            if let parsed = try? JSONSerialization.jsonObject(with: data, options: []) {
+                if let info = parsed as? [String: Any] {
+                    self.updateSolarData(info:info)
+                }
             }
         }
         
@@ -59,8 +97,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         temperatureMenuItem.title = temp + "F"
     }
     
-    func setWind(speed:String, direction:Int) {
-        windMenuItem.title = speed + "mph " + convertToDirection(degrees: direction)
+    func setWindTemp(speed:String, direction:Int, temp:String) {
+        windMenuItem.title = speed + "mph " + convertToDirection(degrees: direction) + " " + temp + "F"
     }
     
     func setBarometer(baromin:String) {
@@ -83,14 +121,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         dailyRainfallMenuItem.title = dailyRainfall + "\" today"
     }
     
-    func updateData(info:[String: Any]) {
+    func setPhotoResistor(photoResistorVoltage:Float) {
+        photoResistorMenuItem.title = photoResistorVoltage.description + "V photo"
+    }
+    
+    func setSolarOutput(solarVoltage:Float, solarWattage:Float) {
+        solarOutputMenuItem.title = solarVoltage.description + "V " + solarWattage.description + "mW solar"
+    }
+    
+    func updateWeatherData(info:[String: Any]) {
         if let temp = info["tempf"] as? String {
             setTemperature(temp: temp)
         }
         
-        if let speed = info["windspeedmph"] as? String, let directionStr = info["winddir"] as? String {
+        if let speed = info["windspeedmph"] as? String, let directionStr = info["winddir"] as? String, let temp = info["tempf"] as? String {
             if let direction = Int(directionStr)  {
-                setWind(speed:speed, direction: direction)
+                setWindTemp(speed:speed, direction: direction, temp:temp)
             }
         }
         
@@ -113,18 +159,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let dailyRainfall = info["dailyrainin"] as? String {
             setDailyRainfall(dailyRainfall: dailyRainfall)
         }
+        
+        updateMenuLabel()
     }
     
+    func updateSolarData(info:[String: Any]) {
+        if let solarVoltage = info["solar_v"] as? Float, let solarWattage = info["solar_power_mw"] as? Float {
+            setSolarOutput(solarVoltage: solarVoltage, solarWattage: solarWattage)
+        }
+        
+        if let photoVoltage = info["photo_v"] as? Float {
+            setPhotoResistor(photoResistorVoltage: photoVoltage)
+        }
+        
+        updateMenuLabel()
+    }
+
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Insert code here to initialize your application
         if let button = statusItem.button {
             button.title = "goats"
-            button.image = NSImage(named: "StatusBarButtonImage")
+            // button.image = NSImage(named: "StatusBarButtonImage")
         }
         
         let menu = NSMenu()
         
-        menu.addItem(temperatureMenuItem)
+        activeItem = windMenuItem;
+        // menu.addItem(temperatureMenuItem)
         menu.addItem(windMenuItem)
         menu.addItem(barometerMenuItem)
         menu.addItem(humidityMenuItem)
@@ -132,6 +193,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(rainfallMenuItem)
         menu.addItem(dailyRainfallMenuItem)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(solarOutputMenuItem)
+        menu.addItem(photoResistorMenuItem)
         
         statusItem.menu = menu
         getUpdate()
